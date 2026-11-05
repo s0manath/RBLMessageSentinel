@@ -1,0 +1,728 @@
+{
+  "channels": {
+    "xml": {
+      "enabled": true,
+      "url": "https://uatcluster2.ratnakarbank.in/ralrt/alrt",
+      "appId": "DCMSDEBITCARD",
+      "version": "1.0",
+      "contentType": "application/xml",
+      "user": "",
+      "password": "",
+      "timeoutSeconds": 30,
+      "certificatePath": "",
+      "certificatePassword": "",
+      "serverCertificatePath": "D:\\Z_Experiment\\SMSListiner\\Certificates\\rbl_cert 2.cer",
+      "sendCustomerIdAndAccountNo": true
+    },
+    "acl": {                 // ACL push SMS (old sendSMS) - only for rules with "channel": "acl"
+      "enabled": true,
+      "url": "https://push3.aclgateway.com/servlet/com.aclwireless.pushconnectivity.listeners.TextListener?",
+      "user": "rblbankalt",
+      "password": "rblbank_01",
+      "appId": "rblbankalt",
+      "subAppId": "rblbankalt",
+      "from": "RBLBNK",
+      "timeoutSeconds": 30
+    }
+    //"vfEmail": {             // VF (Infinito) email API (old sendMailVFAsync) - for rules with "emailTemplate"
+    //  "enabled": true,
+    //  "url": "https://api.goinfinito.com/unified/v2/send",
+    //  "user": "rblcrm_infc0tezlbjh97vmo",
+    //  "password": "kwzgmvxgol4cej1glwn5qluor5zw0yuz",
+    //  "subject": "Transaction Notification",
+    //  "fromEmail": "alerts@rbl.bank.in",
+    //  "fromName": "RBL bank transaction alert",
+    //  "replyToEmail": "no-reply@rbl.bank.in",
+    //  "replyToName": "RBL bank transaction alert",
+    //  "timeoutSeconds": 30
+    //}
+  },
+  "configCheckSeconds": 5, // Appconfig.json is checked for changes every 5 seconds (edits apply within 5 s; 0 = every alert)
+  "traceLog": true,          // true = full XML of every alert in alertLog (UAT); false = short block (production)
+  // AlertTrace_yyyyMMddHH.log: one block per alert (rule, request, gateway result) - for UAT; set false in production if not needed
+  // International I0 / I1 (handleClient: DB insert + markup check), sent as SMS via channels.acl like the old app.
+  // (Add "INTLAdvertisementI0Topic" / "INTLAdvertisementI1Topic" only if RBL gives a DCMS topic - then it goes as XML.)
+  // Texts use #date# #RRN# #Reserv1# .. #Reserv4#
+  // Empty = App.config key of the same name.
+  // HTML email bodies sent via channels.vfEmail - same text as the old app (handleClient emailTemplate / messageTemplate)
+  "emailTemplates": {
+    "debit": "Dear Customer,<br><br>Greetings from RBL Bank!<br><br>We confirm that your account {MaskedFromAc} has been debited with Rs {Amount} via RBL Bank Debit Card XX{Card4} at {Loc} on {EmailDate}. Your available balance is Rs {Balance}.<br><br>For any assistance, please call << 02262327777 >> or write to: customercare@rbl.bank.in.</a><br><br>Assuring you of our best services, at all times.<br><br>Kind Regards,<br>RBL Bank",
+    "credit": "Dear Customer,<br><br>Greetings from RBL Bank!<br><br>We confirm that your account {MaskedFromAc} has been credited with {Amount}  via RBL Bank Debit Card XX<b>{Card4}</b> at {Loc} on {EmailDate}. Your available balance is {Balance}.<br><br>For any assistance, please call <a href='tel:02262327777'>02262327777</a> or write to: <a href='mailto:customercare@rbl.bank.in'>customercare@rbl.bank.in</a>.<br><br>Assuring you of our best services, at all times.<br><br>Kind Regards,<br>RBL Bank",
+    "pinChange": "Dear Customer,<br><br>PIN for your Card No ending with XX{Card4} has been successfully changed at <b>{Loc}</b> on <b>{EmailDate} at {TranTime}</b><br><br>Regards,<br>RBL Bank"
+  },
+
+
+  "oldApp": {
+    "INTLAdvertisementI0": "Dear Customer, Congratulations! You availed the ‘zero foreign currency markup’ offer on your recent international purchase. Continue using your RBL Bank debit card for all your foreign  currency transactions and enjoy the savings until September 30, 2019. T%26C Apply  https://bit.ly/2UBXb8x",
+    "INTLAdvertisementI1": "Dear Customer, Congratulations! You availed the ‘zero foreign currency markup’ offer on your recent international purchase. Continue using your RBL Bank debit card for all your foreign  currency transactions and enjoy the savings until September 30, 2019. T%26C Apply  https://bit.ly/2UBXb8x"
+  },
+
+
+
+
+
+
+
+
+
+  "rules": [
+
+    // ---------------- Limit modification: one rule for ATM / POS / ECOM / Contactless all in 4 templates
+    // topic = dconuslimitmod + Setlimit in lower case + success, e.g. dconuslimitmodatmsuccess
+    //FDAlert Have 4 Template ATM ,POS,ECOM,Contactless for The Limit of Person card ON Modification
+    //This Event is getting triggered when Debit card limit modification is done for Contactless transaction via ATM  (dconuslimitmodcontactlesssuccess)(1107176130620228133)
+    //This Event is getting triggered when Debit card limit modification is done for ECOM transaction via ATM (dconuslimitmodecomsuccess)(1107176121279460854)
+    //This Event is getting triggered when Debit card limit modification is done for POS transaction via ATM (dconuslimitmodpossuccess)(1107176157256175404)
+    //This Event is getting triggered when Debit card limit modification is done for ATM transaction via ATM (dconuslimitmodatmsuccess)(1107176157264297237)
+
+    {
+      "name": "DCOnusLimitModSuccess",
+      "flag": "FDAlert",
+      "when": { "Setlimit": "ATM|POS|ECOM|Contactless" },
+      "topic": "dconuslimitmod{SetLimit:lower}success",
+      "sms": "Dear Customer, The transaction limit on your RBL Bank Debit card ending with {Card4} has been modified as per your request to Rs {Amount} for {SetLimit}. Please call 02262327777 for any assistance. Kind regards, RBL Bank"
+    },
+
+
+    //This Event is getting triggered when Debit card transaction preference modification (Enable/Disable) is done for debit card via ATM (DCOnusTrxnPreferenceModSuccess) (1107176157276418662)
+    {
+      "name": "DCOnusTrxnPreferenceModSuccess",
+      "flag": "bTransactionpreference",
+      "topic": "dconustrxnpreferencemodsuccess",
+      "sms": "Dear Customer, As per your request we have updated transaction preference on your debit card on {Card4}. For any query call customers care at 02262327777. Kind Regards RBL Bank"
+    },
+
+
+
+
+
+
+    // ---------------- RO ATM / Metro / Non-Metro ATM limit warning and final (4 templates)
+    //RBL Metro ATM - 2 free transactions per month, then charges apply; RBL non-Metro ATM - 5 free transactions per month, then charges apply; Non-RBL Metro ATM - 2 free transactions per month, then charges apply; Non-RBL non-Metro ATM - 5 free transactions per month, then charges apply.
+
+
+    //This Event is getting triggered to alert customer that he/she utilized monthly debit card limit of non RBL & non Metro ATM transactions.(dcroatmnonmetrolimitfinal)(1107170506432171988)
+    {
+      "name": "DCROATMNonMetroLimitFinal",
+      "flag": "bnon_metro_alert_triger",
+      "topic": "dcroatmnonmetrolimitfinal",
+      "sms": "You have utilised monthly limit of free ATM transactions on non RBL Bank non Metro ATMs for your debit card {Card4}. Txn charges will apply, hereafter - RBL Bank"
+    },
+    //This Event is getting triggered to warn customer that he/she can utilize debit card for non RBL & non Metro ATM transactions. Further fees will be applicable for non RBL & non Metro ATM transactions.(dcroatmnonmetrolimitwarning)(1107170506427014389)
+    {
+      "name": "DCROATMNonMetroLimitWarning",
+      "flag": "bnon_metro_alert_triger_2",
+      "topic": "dcroatmnonmetrolimitwarning",
+      "sms": "Your RBL Bank debit card XX{Card4} can be used for 2 more free non Metro ATM transactions on non RBL Bank ATMs this month. Txn charges will apply, thereafter."
+    },
+    //This Event is getting triggered to alert customer that he/she utilized monthly debit card limit of non RBL & Metro ATM transactions.(dcroatmmetrolimitfinal)(1107170506420917162)
+    {
+      "name": "DCROATMMetroLimitFinal",
+      "flag": "bmetro_alert_triger",
+      "topic": "dcroatmmetrolimitfinal",
+      "sms": "You have utilised monthly limit of free ATM transactions on non RBL Bank Metro ATMs for your debit card {Card4}. Txn charges will apply, hereafter - RBL Bank"
+    },
+    //This Event is getting triggered to warn customer that he/she can utilize debit card for non RBL & Metro ATM transactions. Further fees will be applicable for non RBL & Metro ATM transactions.(dcroatmmetrolimitwarning)(1107170506354300877)
+    {
+      "name": "DCROATMMetroLimitWarning",
+      "flag": "bmetro_alert_triger_2",
+      "topic": "dcroatmmetrolimitwarning",
+      "sms": "Your RBL Bank debit card XX{Card4} can be used for 2 more free Metro ATM transactions on non RBL Bank ATMs this month. Txn charges will apply, thereafter."
+    },
+
+
+
+
+
+
+
+    // Reversals credit alert (ATM / POS / ECOM / Contactless) - 4 templates
+
+    //This Event is getting triggered when  POS  DOM/INT Original/Reversal transaction is getting performed on Debit Card.(dcposfinancialorgrevsuccess)(1107173218451519015)
+    {
+      "name": "DCPOSFinancialOrgRevSuccess - reversal",
+      "flag": "bReversalTran",
+      "when": { "product": "=POS" },
+      "topic": "dcposfinancialorgrevsuccess",
+      "email": true,
+      "emailTemplate": "credit",
+      "sms": "RBL Bank Debit card {Card4} is Credited via POS for Rs {Amount} on {Date} at {Loc}. Not you, fwd this SMS to 918505807500",
+      "mergeVars": {
+        "sTranType": "{Product}",
+        "sFromAc": "{MaskedFromAc}",
+        "txtsIntlTranCur": "{Amount}",
+        "sTranCard": "{Card4}",
+        "sTranLoc": "{Loc}",
+        "sTranDate": "{EmailDate}",
+        "sCurBal": "{Balance}"
+      }
+    },
+    // This Event is getting triggered when contactless transaction is successful within contactless limit.(DCContactlessFinancialOrgRevSuccess)(1107172802662860361)
+
+    {
+      "name": "DCContactlessFinancialOrgRevSuccess - reversal CONTACTLESS",
+      "flag": "bReversalTran",
+      "when": { "product": "=CONTACTLESS" },
+      "topic": "dccontactlessfinancialorgrevsuccess",
+      "email": true,
+      "emailTemplate": "credit",
+      "sms": "Rs {Amount} Credited via RBL Bank Debit card {Card4} on {Date} at {Loc} w/o OTP/PIN. Not you, fwd this SMS to 918505807500",
+      "mergeVars": {
+        "sTranType": "{Product}",
+        "sFromAc": "{MaskedFromAc}",
+        "txtsIntlTranCur": "{Amount}",
+        "sTranCard": "{Card4}",
+        "sTranLoc": "{Loc}",
+        "sTranDate": "{EmailDate}",
+        "sCurBal": "{Balance}"
+      }
+    },
+
+    //This Event is getting triggered when  ATM/Ecom DOM/INT Original/Reversal transaction is getting performed on Debit Card.(dcatmecomfinancialorgrevsuccess)(1107172802609895370)
+    {
+      "name": "DCATMEcomFinancialOrgRevSuccess - reversal",
+      "flag": "bReversalTran",
+      "topic": "dcatmecomfinancialorgrevsuccess",
+      "email": true,
+      "emailTemplate": "credit",
+      "sms": "RBL Bank Debit card {Card4} is Credited for {Product} of Rs {Amount} on {Date} at {Loc}. Not you, fwd this SMS to 918505807500",
+      "mergeVars": {
+        "sTranType": "{Product}",
+        "sFromAc": "{MaskedFromAc}",
+        "txtsIntlTranCur": "{Amount}",
+        "sTranCard": "{Card4}",
+        "sTranLoc": "{Loc}",
+        "sTranDate": "{EmailDate}",
+        "sCurBal": "{Balance}"
+      }
+    },
+
+
+
+
+
+
+
+
+
+
+
+    // ---------------- Original debits (replace the commented ATM / POS / ECOM blocks at the end of handleClient)
+
+    // This Event is getting triggered when  ATM/Ecom DOM/INT Original/Reversal transaction is getting performed on Debit Card.(dcatmecomfinancialorgrevsuccess)(1107172802609895370)
+    {
+      "name": "DCATMEcomFinancialOrgRevSuccess - ATM debit",
+      "when": {
+        "TranType": "01",
+        "RespCode": "00",
+        "flag:bReversalTran": "false"
+      },
+      "topic": "dcatmecomfinancialorgrevsuccess",
+      "email": true,
+      "emailTemplate": "debit",
+      "sms": "RBL Bank Debit card {Card4} is Debited for ATM of Rs {Amount} on {Date} at {Loc}. Avl bal Rs {Balance}. Not you, fwd this SMS to 918505807500",
+      "mergeVars": {
+        "sTranType": "{Product}",
+        "sFromAc": "{MaskedFromAc}",
+        "txtsIntlTranCur": "{Amount}",
+        "sTranCard": "{Card4}",
+        "sTranLoc": "{Loc}",
+        "sTranDate": "{EmailDate}",
+        "sCurBal": "{Balance}"
+      }
+    },
+    //This Event is getting triggered when  ATM/Ecom DOM/INT Original/Reversal transaction is getting performed on Debit Card.(dcatmecomfinancialorgrevsuccess)(1107172802609895370)
+    {
+      "name": "DCATMEcomFinancialOrgRevSuccess - ECOM debit",
+      "when": {
+        "TranType": "00",
+        "RespCode": "00",
+        "product": "ECOM",
+        "Amount": "!0",
+        "flag:bReversalTran": "false"
+      },
+      "topic": "dcatmecomfinancialorgrevsuccess",
+      "email": true,
+      "emailTemplate": "debit",
+      "sms": "RBL Bank Debit card {Card4} is Debited for ECOM of Rs {Amount} on {Date} at {Loc}. Avl bal Rs {Balance}. Not you, fwd this SMS to 918505807500",
+      "mergeVars": {
+        "sTranType": "{Product}",
+        "sFromAc": "{MaskedFromAc}",
+        "txtsIntlTranCur": "{Amount}",
+        "sTranCard": "{Card4}",
+        "sTranLoc": "{Loc}",
+        "sTranDate": "{EmailDate}",
+        "sCurBal": "{Balance}"
+      }
+    },
+    //This Event is getting triggered when  POS  DOM/INT Original/Reversal transaction is getting performed on Debit Card.(dcposfinancialorgrevsuccess)(1107173218451519015)
+    {
+      "name": "DCPOSFinancialOrgRevSuccess - POS debit",
+      "when": {
+        "TranType": "00",
+        "RespCode": "00",
+        "product": "POS",
+        "flag:bReversalTran": "false"
+      },
+      "topic": "dcposfinancialorgrevsuccess",
+      "email": true,
+      "emailTemplate": "debit",
+      "sms": "RBL Bank Debit card {Card4} is Debited via POS for Rs {Amount} on {Date} at {Loc}. Avl bal Rs {Balance}. Not you, fwd this SMS to 918505807500",
+      "mergeVars": {
+        "sTranType": "{Product}",
+        "sFromAc": "{MaskedFromAc}",
+        "txtsIntlTranCur": "{Amount}",
+        "sTranCard": "{Card4}",
+        "sTranLoc": "{Loc}",
+        "sTranDate": "{EmailDate}",
+        "sCurBal": "{Balance}"
+      }
+    },
+    // This Event is getting triggered when contactless transaction is successful within contactless limit.(DCContactlessFinancialOrgRevSuccess)(1107172802662860361)
+    {
+      "name": "DCContactlessFinancialOrgRevSuccess - contactless debit",
+      "flag": "bDebitCardTxnContactless",
+      "topic": "dccontactlessfinancialorgrevsuccess",
+      "email": true,
+      "emailTemplate": "debit",
+      "sms": "Rs {Amount} debited via RBL Bank Debit card {Card4} on {Date} at {Loc} w/o OTP/PIN. Avl bal Rs {Balance}. Not you, fwd this SMS to 918505807500",
+      "mergeVars": {
+        "sTranType": "{Product}",
+        "sFromAc": "{MaskedFromAc}",
+        "txtsIntlTranCur": "{Amount}",
+        "sTranCard": "{Card4}",
+        "sTranLoc": "{Loc}",
+        "sTranDate": "{EmailDate}",
+        "sCurBal": "{Balance}"
+      }
+    },
+
+
+
+
+    // Declines alert (ATM / POS / ECOM / Contactless) - 5 templates
+
+    //This Event is getting triggered when debit card transaction gets declined when transaction preference is disabled for specific transaction (ATM/POS/ECOM/Contactless)(dctrxnpreferencedisableddeclined)(1107173218469874120)
+
+
+    {
+      "name": "DCTrxnPreferenceDisabledDeclined",
+      "flag": "bDebitCardDisableATMPOSECOMTran",
+      "topic": "dctrxnpreferencedisableddeclined",
+      "sms": "{Product} txn on RBL Bank Debit Card {Card4} declined as {Product} txn is disabled. Enable via Security Settings in MyBankApp/NetBanking."
+    },
+
+
+
+    // This Event is getting triggered when debit card transaction gets successful without OTP/PIN for Moto transaction (Domestic/International)
+    //SI Moto Transaction Alert(dcsimototrxnsuccess)(1107176130601381178)
+
+    {
+      "name": "DCSIMOTOTrxnSuccess",
+      "flag": "SIMotoTransactionAlert",
+      "topic": "dcsimototrxnsuccess",
+      "email": true,
+      "emailTemplate": "debit",
+      "sms": "Rs {Amount} spent at {Loc} on Debit card XX{Card4} on {Date} without OTP/PIN. Avl bal Rs {Balance}. If not done by you, call 02262327777, RBL Bank.",
+      "mergeVars": {
+        "sTranType": "{Product}",
+        "sFromAc": "{MaskedFromAc}",
+        "txtsIntlTranCur": "{Amount}",
+        "sTranCard": "{Card4}",
+        "sTranLoc": "{Loc}",
+        "sTranDate": "{EmailDate}",
+        "sCurBal": "{Balance}"
+      }
+    },
+
+    //Incorrect CVV2 for ECOM transaction
+    //This Event is getting triggered when debit card transaction gets declined as customer entered wrong CVV2 for ECOM transaction (1107173218477778178) (dcecomincorrectcvv2declined)
+
+    {
+      "name": "DCEcomIncorrectCVV2Declined",
+      "flag": "bDebitCard_Incorrect_CVV",
+      "when": { "product": "ECOM" },
+      "topic": "dcecomincorrectcvv2declined",
+      "sms": "{Product} txn on your RBL Bank Debit Card {Card4} could not be processed due to incorrect CVV. Pls reinitiate the txn with correct CVV."
+    },
+
+    //If Product Is Not ECOM and the flag bDebitCard_Incorrect_CVV is true then drop the message
+    {
+      "name": "Incorrect CVV - not ECOM (no template)",
+      "flag": "bDebitCard_Incorrect_CVV",
+      "drop": true
+    },
+
+
+
+    //Expired Debit Card Decline Alert
+    //This Event is getting triggered when expired debit card is used for any transaction.(1107176121302016469)(dccardexpireddeclined)
+    {
+      "name": "DCCardExpiredDeclined",
+      "flag": "bDebitCard_ExpiredCard",
+      "topic": "dccardexpireddeclined",
+      "sms": "{Product} txn on your RBL Bank Debit Card {Card4} has been declined as the validity of the card {Card4} has expired. Pls call 02262327777 or visit any RBL Bank branch."
+    },
+
+
+    //Transaction Timeout Error Decline Alert
+    //This Event is getting triggered when transaction response is not received with specific time period.(1107173218495894462)(dctimeouterrordeclined)
+    {
+      "name": "DCTimeoutErrorDeclined",
+      "flag": "bDebitCard_txn_timout",
+      "topic": "dctimeouterrordeclined",
+      "sms": "{Product} txn on your RBL Bank Debit Card {Card4} for INR {Amount} could not be processed due to timeout error. Pls reinitiate the txn after sometime."
+    },
+
+
+
+    //Transaction Limit Exceeded Decline Alert for POS/Contactless/ECOM/ATM Transaction
+    //This Event is getting triggered when daily transaction limit for POS transaction is exhausted for debit card (dcposlimitexccededdeclined) (1107173218583190444)
+    {
+      "name": "DCPOSLimitExceededDeclined",
+      "flag": "bDebitCard_exceedLimit",
+      "when": { "product": "POS|Contactless" },
+      "topic": "dcposlimitexccededdeclined",
+      "sms": "You have exceeded the POS txn limit on your RBL Bank Debit Card {Card4}. To reset limits for txns type, login to Mobile App or Net Banking"
+    },
+
+    //This Event is getting triggered when daily transaction limit for ECOM transaction is exhausted for debit card (dcecomlimitexccededdeclined)(1107173218670520206)
+    {
+      "name": "DCEcomLimitExceededDeclined",
+      "flag": "bDebitCard_exceedLimit",
+      "when": { "product": "ECOM" },
+      "topic": "dcecomlimitexccededdeclined",
+      "sms": "You have exceeded the Online txn limit on your RBL Bank Debit Card {Card4}. To reset limits for txns type, login to Mobile App or Net Banking"
+    },
+
+    //This Event is getting triggered when daily transaction limit for ATM transaction is exhausted for debit card(1107173218523354632)(dcatmlimitexccededdeclined)
+    {
+      "name": "DCATMLimitExceededDeclined",
+      "flag": "bDebitCard_exceedLimit",
+      "topic": "dcatmlimitexccededdeclined",
+      "sms": "You have exceeded the ATM withdrawal txn limit on your RBL Bank Debit Card {Card4}. To reset limits for txns type, login to Mobile App or Net Banking"
+    },
+
+
+
+    //Temporarily blocked debit card decline alert
+    //This Event is getting triggered when transaction performed by customer with debit card which is temporarily blocked(dccardtempblockeddeclined)(1107176130656234977)
+    {
+      "name": "DCCardTempBlockDeclined",
+      "flag": "bDebitCard_temblock",
+      "topic": "dccardtempblockeddeclined",
+      "sms": "Your {Product} txn is declined as RBL Bank debit card {Card4} is temporarily blocked. Login to MyBank/Net banking to enable or call 02262327777 for assistance"
+    },
+
+    //Incorrect Expiry Date Decline Alert for ECOM Transaction
+    //This Event is getting triggered when invalid expiry is entered by customer for ECOM transaction (DCEcomIncorrectExpiryDeclined)(1107173218680025242)
+    {
+      "name": "DCEcomIncorrectExpiryDeclined",
+      "flag": "bDebitCard_ExpiredCardECOM",
+      "topic": "dcecomincorrectexpirydeclined",
+      "sms": "Your ECOM txn for Rs. {Amount} via RBL Bank Debit Card {Card4} declined due to incorrect expiry date. Pls reinitiate the txn with correct expiry date."
+    },
+
+    //Insufficient Fund Decline Alert for POS/ECOM/ATM Transaction
+    //This Event is getting triggered when customers account contains less amount against transaction amount.(dcinsufficientfunddeclined)(1107173218692570052)
+    {
+      "name": "DCInsufficientFundDeclined",
+      "flag": "bDebitCard_InsufficientFund",
+      "topic": "dcinsufficientfunddeclined",
+      "sms": "Txn at {Loc} on {Date} using RBL Bank Debit Card {Card4} declined due to insufficient funds. Check balance on Mobile App, Net Banking or WhatsApp."
+    },
+
+
+    //Incorrect PIN Decline Alert for POS/ECOM/ATM Transaction
+    //This Event is getting triggered when customers provides wrong PIN for debit card transaction (dcincorrectpindeclined)(1107176121306641037)
+    {
+      "name": "DCIncorrectPINDeclined",
+      "flag": "WrongPIN",
+      "when": { "RespCode": "55" },
+      "topic": "dcincorrectpindeclined",
+      "sms": "Txn at {Loc} on {Date} declined on your RBL Bank Debit Card {Card4} due to incorrect PIN. Retry with correct PIN or call 02262327777 to generate new PIN."
+    },
+    //This Event is getting triggered when customer enters more than 3 times consecutive wrong PIN for debit card transaction(dc3consecutiveincorrectpindeclined)(1107173988054013516)
+    {
+      "name": "DC3ConsecutiveIncorrectPINDeclined",
+      "flag": "WrongPIN",
+      "topic": "dc3consecutiveincorrectpindeclined",
+      "sms": "We have temporarily blocked your RBL Bank Debit Card due to 3 consecutive incorrect PIN attempts. To unblock & generate new PIN, click https://www.rbl.bank.in/ways-to-generate-debit-card-pin"
+    },
+
+
+    //This Event is getting triggered when customer exceed his/her monthly transaction count limit for debit card (1107173218700245006) (dcroatmhighusedeclined)
+    //old code has this SMS switched off. So we will keep it disabled for now.
+    {
+      "name": "DCROATMHighuseDeclined (old code has this SMS switched off)",
+      "enabled": false,
+      "flag": "bDebitCard_Offus_Highuse",
+      "topic": "dcroatmhighusedeclined",
+      "sms": "Your RBL Bank Debit Card {Card4} is disabled for Non RBL Bank ATM use due to high usage & will be enabled next month. Pls continue to use it at RBL Bank ATM."
+    },
+
+
+
+
+
+    // This Event is getting triggered when customer initiates a POS/ECOM transaction from non compliant merchant as per RBI policy (dcromerchantnoncompliantdeclined)(1107173218708210308)
+    {
+      "name": "DCROMerchantNonCompliantDeclined",
+      "flag": "bDebitCard_Merchant_Non_Complient",
+      "when": { "product": "ECOM|POS" },
+      "topic": "dcromerchantnoncompliantdeclined",
+      "sms": "Your Txn on RBL Bank Debit Card {Card4} for Rs. {Amount} is declined as the merchant is non-compliant as per regulatory guidelines."
+    },
+    //
+    //If Product Is Not ECOM or POS and the flag bDebitCard_Merchant_Non_Complient is true then drop the message
+    {
+      "name": "Merchant non compliant - not ECOM/POS (no template)",
+      "flag": "bDebitCard_Merchant_Non_Complient",
+      "drop": true
+    },
+
+
+
+
+
+    //This Event is getting triggered when C2C transaction is performed.(dcc2ctransfersuccess)(1007843707094724548)
+    {
+      "name": "DCC2CTransferSuccess",
+      "flag": "C2CAlert",
+      "topic": "dcc2ctransfersuccess",
+      "sms": "INR {Amount} a/c {FromAc} on {Date} by use of Card no ending {Card4} for C2C transfer.For assistance call 918505807500"
+    },
+
+
+
+
+
+    //This Event is getting triggered when debit card is not activated first time by first PIN based transaction.(dcfirstecomdeclinedcardinactive)(1107161192535937487)
+    {
+      "name": "DCFirstEcomDeclinedCardInactive",
+      "flag": "FstPinTran01",
+      "topic": "dcfirstecomdeclinedcardinactive",
+      "sms": "Dear Customer, your recent e-Commerce transaction declined as your debit card is inactive. Please perform a PIN based transaction at any ATM or merchant outlet to activate your card. Kind Regards, RBL Bank."
+    },
+
+
+    //This event is triggered by ACS when user input 3 wrong OTP in Ecom transaction (dcecom3invalidotpattemp) (1107176121335126250)
+
+    {
+      "name": "DCEcom3InvalidOTPAttemp",
+      "flag": "bACSOTPexceeded",
+      "topic": "dcecom3invalidotpattemp",
+      "sms": "E-Comm transactions on your RBL Bank Debit card {Card4} has been disabled due to 3 invalid OTP attempts. To enable transactions, please call 02262327777."
+    },
+
+
+
+
+    // ---------------- BSBDA / micro   ATM Basic Savings Bank Deposit Account, for non rbl bank with non-metro-------------------------------------------
+
+
+    //This Event is getting triggered to warn customer that he/she can utilize debit card for non RBL ATM Cash transactions. Further fees will be applicable for non RBL & non ATM transactions for BSBDA account(dcrocwdnonmetrolimitbsbdawarning)(1107173916461101686)
+    {
+      "name": "DCROCWDNonMetroLimitBSBDAWarning (FI_001)",
+      "flag": "bDebitCard_BSBDA_FI_001",
+      "topic": "dcrocwdnonmetrolimitbsbdawarning",
+      "sms": "Your RBL Bank debit card XX{Card4} can be used for 2 more free cash withdrawal at non RBL Bank ATMs this month. Txn charges will apply thereafter."
+    },
+
+    //This event is getting triggered when customer has utilized his/her monthly limit of ATM cash transactions and fees will be applied here after for BSBDA accounts(dcrocwdnonmetrolimitbsbdafinal)(1107173916473100817)
+    {
+      "name": "DCROCWDNonMetroLimitBSBDAFinal (FI_002)",
+      "flag": "bDebitCard_BSBDA_FI_002",
+      "topic": "dcrocwdnonmetrolimitbsbdafinal",
+      "sms": "You have utilised monthly limit of free cash withdrawal at non RBL Bank ATMs for your debit card XX{Card4}. Txn charges will apply hereafter - RBL Bank"
+    },
+
+    //This Event is getting triggered to warn customer that he/she can utilize debit card for non RBL ATM  Non Cash transactions. Further fees will be applicable for non RBL & non ATM transactions for BSBDA account(dcrocwdnonmetrolimitbsbdawarning)(1107173916486004849)
+
+    {
+      "name": "BSBDA FI_003 non cash warning - CONFIRM TOPIC before enabling",
+      "flag": "bDebitCard_BSBDA_FI_003",
+      "topic": "dcrononcashnonmetrolimitbsbdawarning",
+      "sms": "Your RBL Bank debit card XX{Card4} can be used for 2 more free ATM transactions at non RBL Bank ATMs this month. Txn charges will apply thereafter."
+    },
+
+    //This event is getting triggered when customer has utilized his/her monthly limit of ATM non cash transactions and fees will be applied here after for BSBDA accounts(dcrononcashnonmetrolimitbsbdafinal)(1107173916500064909)
+    {
+      "name": "DCRONonCashNonMetroLimitBSBDAFinal (FI_004)",
+      "flag": "bDebitCard_BSBDA_FI_004",
+      "topic": "dcrononcashnonmetrolimitbsbdafinal",
+      "sms": "You have utilised monthly limit of free ATM transactions at non RBL Bank ATMs for your debit card XX{Card4}. Txn charges will apply hereafter - RBL Bank"
+    },
+
+    //This Event is getting triggered to warn customer that he/she can utilize debit card for non RBL ATM transactions. Further fees will be applicable for non RBL ATM transactions.(dcromatmcwdnonmetrolimitbsbdawarning)(1107173883685958029)
+    {
+      "name": "DCROMATMCWDNonMetroLimitBSBDAWarning",
+      "flag": "bDebitCard_mATM_Warning",
+      "topic": "dcromatmcwdnonmetrolimitbsbdawarning",
+      "sms": "Your RBL Bank Debit Card XX{Card4} can be used for 2 more free micro-ATM cash transactions this month. Txn charges will apply, hereafter."
+    },
+    //This Event is getting triggered to alert customer that he/she utilized monthly debit card limit of non RBL ATM transactions.(dcromatmcwdnonmetrolimitbsbdafinal)(1107173883675920789)
+    {
+      "name": "DCROMATMCWDNonMetroLimitBSBDAFinal",
+      "flag": "DebitCard_mATM_Final",
+      "topic": "dcromatmcwdnonmetrolimitbsbdafinal",
+      "sms": "You have utilised monthly limit of free micro-ATM transactions for your RBL Bank Debit Card XX{Card4}. Txn charges will apply, hereafter."
+    },
+
+    // ---------------- Email only-------------------------------------for PIN change -------------------------------------------------
+    {
+      "name": "DCPINChangeEmailSuccess",
+      "flag": "PINChange",
+      "topic": "dcpinchangeemailsuccess",
+      "mobile": false,
+      "email": true,
+      "emailTemplate": "pinChange",
+      "mergeVars": {
+        "sTranTime": "{TranTime}",
+        "sTranCard": "{Card4}",
+        "sTranLoc": "{Loc}",
+        "sTranDate": "{EmailDate}"
+      }
+    },
+
+
+
+
+
+    // ---------------- Digital channel - SET "when" TO THE ALERT FIELDS THAT IDENTIFY EACH ONE, then enable
+    //{
+    //  "name": "DigitalPINSetSuccess (PIN set from RIB channel)",
+    //  "enabled": false,
+    //  "when": {
+    //    "TranType": "?",
+    //    "RespCode": "00"
+    //  },
+    //  "topic": "digitalpinsetsuccess",
+    //  "sms": "Dear Customer,PIN request for your Card No ending with {Card4} has been processed successfully. Kind Regards, RBL Bank"
+    //},
+    //{
+    //  "name": "DigitalTrxnPreferenceModSuccess (txn preference change from RIB / MyBank)",
+    //  "enabled": false,
+    //  "when": {
+    //    "TranType": "?",
+    //    "RespCode": "00"
+    //  },
+    //  "topic": "digitaltrxnpreferencemodsuccess",
+    //  "sms": "Dear Customer,As per your request we have updated transaction preferences on your Debit Card no {Card4}.For any query call customers care at 02262327777. Kind Regards, RBL Bank"
+    //},
+    //{
+    //  "name": "DigitalCardTempBlockedSuccess (block from digital channels)",
+    //  "enabled": false,
+    //  "when": {
+    //    "TranType": "?",
+    //    "RespCode": "00"
+    //  },
+    //  "topic": "digitalcardtempblockedsuccess",
+    //  "sms": "Greetings from RBL Bank! As per your request your Debit card ending with {Card4} has been blocked temporarily. Please call 02262327777 for any assistance. Kind Regards, RBL Bank"
+    //},
+    //{
+    //  "name": "DigitalCardTempUnblockedSuccess (unblock from digital channels)",
+    //  "enabled": false,
+    //  "when": {
+    //    "TranType": "?",
+    //    "RespCode": "00"
+    //  },
+    //  "topic": "digitalcardtempunblockedsuccess",
+    //  "sms": "Greetings from RBL Bank! As per your request your Debit card ending with {Card4} has been unblocked. Please call 02262327777 for any assistance. Kind Regards, RBL Bank"
+    //},
+
+    // ---------------- Sent via ACL SMS like the old app (old handleClient sendSMS) - no DCMS topic, plain text to channels.acl
+    {
+      "name": "Do not honor 05",
+      "channel": "acl",
+      "flag": "DoNotHonor",
+      "sms": "Dear Customer, your recent debit card transaction declined as it was attempted at a non-compliant merchant as per RBI regulations . Kind Regards, RBL Bank."
+    },
+    {
+      "name": "Transaction not permitted 57",
+      "channel": "acl",
+      "flag": "TranNotPermited57",
+      "sms": "Greetings from RBL Bank, your recent international transaction was declined as you hold a domestic debit card. Please visit the nearest branch to opt for an international card."
+    },
+    {
+      "name": "Green PIN - OTP at ATM",
+      "channel": "acl",
+      "flag": "bGPatATM",
+      "sms": "{Activationcode} is the OTP to generate new PIN for your Debit Card at RBL Bank ATM. Valid for 24 Hours. DON'T SHARE WITH ANYONE. Not you? Pls call 022 62327777."
+    },
+    {
+      "name": "Green PIN - PIN generated",
+      "channel": "acl",
+      "flag": "bGPG",
+      "sms": "You have successfully generated new PIN for your RBL Bank Debit Card ending with {Card4}. Transact now to enjoy the benefits! Not you? Pls call 022 62327777."
+    },
+    {
+      "name": "Green PIN - incorrect OTP",
+      "channel": "acl",
+      "flag": "bGPF",
+      "sms": "Your request to generate new PIN for your RBL Bank Debit Card has failed due to incorrect OTP. Pls retry with valid OTP. For assistance, call 022 62327777."
+    },
+    {
+      "name": "Green PIN - OTP attempts exceeded",
+      "channel": "acl",
+      "flag": "bGPOTPF",
+      "sms": "OTP validation failed. Please regenerate a new OTP at RBL Bank ATM to proceed with PIN generation."
+    },
+    {
+      "name": "Green PIN - OTP expired",
+      "channel": "acl",
+      "flag": "bGPOTPE",
+      "sms": "OTP entered has expired. Pls visit any RBL Bank ATM to regenerate a new OTP and proceed with PIN generation request. For assistance, call 022 62327777."
+    },
+
+
+
+
+
+    // -------------------NCMC All The Template -----------------------------------------------------------------------------------------------------
+    //This SMS will be triggered when customer is giving cash payment at Metro station counter for adding his/her wallet balance.(1107175612735704611)
+
+    {
+      "name": "NCMC1 wallet credited",
+      "flag": "bNCMC1",
+      "topic": "ncmcmlwvc",
+      "sms": "INR {Amount} has been credited to your NCMC wallet linked to your RBL Bank Debit Card {Card4} on {Date}. For details, call 02262327777."
+    },
+    //This SMS will be triggered when customer is using RBL Debit card at Metro station counter for adding his/her wallet balance.(1107175612759942454)
+    {
+      "name": "NCMC2 wallet credited from card",
+      "flag": "bNCMC2",
+      "topic": "ncmcmlwvdc",
+      "sms": "INR {Amount} has been credited to your NCMC wallet linked to your RBL Bank Debit Card {Card4} from Card on {Date}. For details, call 02262327777."
+    },
+    //This SMS will be triggered when Switch process the offline settled transactions received from NPCI in the Settlement file.(1107175612844208993)
+    {
+      "name": "NCMC3 offline txns",
+      "flag": "bNCMC3",
+      "topic": "ncmctlw",
+      "sms": "{ncmcOfflineDebitCount} debit txns and {ncmcOfflineCreditCount} credit txns on your NCMC wallet linked to your RBL Bank Debit Card {Card4} on {Date:dd-MM-yy}. To view, login to MyBank app/Net Banking."
+    },
+    //This SMS will be triggered for Balance Update transaction when the wallet balance is transferred from the online wallet to the Offline Wallet. Online wallet will hold the balance that Money Load is done via Digital Channels. Also, this Online wallet will hold the balance when the card is Renewed or Re-issued (Damaged Card) when the customer does the Balance update transaction that time also this alert will be triggered.(1107175612860119812)
+    {
+      "name": "NCMC4 balance transfer",
+      "flag": "bNCMC4",
+      "topic": "ncmcbt",
+      "sms": "Bal of INR {Amount} from NCMC wallet has been successfully transferred to your NCMC wallet linked to RBL Bank Debit Card {Card4}. For details, call 02262327777."
+    },
+    //This SMS will be triggered when customer is unable to add money in wallet from his/her RBL Debit card.(1107175612883512966)
+    {
+      "name": "NCMC5 wallet top-up failed",
+      "flag": "bNCMC5",
+      "topic": "ncmcmld",
+      "sms": "Your request to add INR {Amount} via RBL Bank Debit Card {Card4} in your wallet could not be processed on {Date:dd-MM-yy}. For details, call 02262327777."
+    },
+
+    //This is the MDES Network OTP sent when a Mastercard Debit Card is registered on Google Pay.(110717411615901533)
+    {
+      "name": "Google Pay registration OTP (MDES)",
+      "flag": "bMDES",
+      "topic": "mdesnetworkotp",
+      "sms": "{Activationcode} is the OTP to register your RBL Debit Card {Card4} with Google Pay. Valid for 15 mins. DON'T SHARE WITH ANYONE. Not you? Please call 02262327777"
+    }
+  ]
+}
